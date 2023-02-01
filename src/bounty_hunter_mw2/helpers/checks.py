@@ -6,14 +6,15 @@ from typing import Callable, TypeVar
 from discord.ext import commands
 
 from exceptions import *
-from helpers import db_manager
+from bounty_hunter_mw2.helpers import db_manager
+from bounty_hunter_mw2.config import Config
 
 
 
-load_dotenv()
-config_path = os.environ.get("BOT_CONFIG_PATH")
+#load_dotenv()
+#config_path = os.environ.get("BOT_CONFIG_PATH")
 T = TypeVar("T")
-
+config = Config.todict()
 
 
 def is_owner() -> Callable[[T], T]:
@@ -21,10 +22,8 @@ def is_owner() -> Callable[[T], T]:
     This is a custom check to see if the user executing the command an owner of the bot.
     """
     async def predicate(context: commands.Context) -> bool:
-        with open(config_path, 'r') as file:
-            data = json.load(file)
-
-        if context.author.id not in data['owners']:
+        
+        if context.author.id not in config['owners']:
             raise UserNotOwner
         return True
 

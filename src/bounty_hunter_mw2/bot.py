@@ -15,16 +15,9 @@ import bounty_hunter_mw2.exceptions
 from bounty_hunter_mw2.models import Base, BotUser, Report, engine, AioSession, init_db
 
 
-config_path = f"{os.path.realpath(os.path.dirname(__file__))}/config.json"
+
 cog_path = f"{os.path.realpath(os.path.dirname(__file__))}/cogs"
-if not os.path.isfile(config_path):
-    sys.exit("'config.json' not found! Please set it up now!")
-
-else:
-    with open(config_path, 'r') as file:
-        config = json.load(file)
-
-
+config = Config.todict()
 
 intents = discord.Intents.default()
 intents.members = True
