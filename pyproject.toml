@@ -8,6 +8,9 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.9"
+discord = "^2.1.0"
+sqlalchemy = {extras = ["aiosqlite"], version = "^2.0.0"}
+aiosqlite = "^0.18.0"
 
 [tool.poetry.dev-dependencies]
 

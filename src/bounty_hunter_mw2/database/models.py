@@ -1,11 +1,11 @@
-from typing import Optional, Union
+from typing import Optional, Literal
 
 from hashlib import sha256
 from datetime import datetime, timedelta
 
 from sqlalchemy import BigInteger, Column, Integer, Boolean, DateTime, Date, ForeignKey, Table, String, Float
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship, validates
 from discord import Member, User, Message
 
 
@@ -13,10 +13,14 @@ from discord import Member, User, Message
 Base = declarative_base()
 
 
-class GuildMember(Base):
-    __tablename__ = "member"
+class BotUser(Base):
+    """
+    A Database Model class to represent registered users of the bot.
+    id is the Unique ID of the discord Member object.
+    """
+    __tablename__ = "bot_user"
     id = Column(BigInteger, primary_key=True, autoincrement=False)
-    discord_username = Column(String(32), index=True)
+    guild_id = Column(BigInteger, index=True)
     twitter_name = Column(String(32), index=True, unique=True)
     activision_id = Column(String(128), index=True, unique=True)
     passkey_hash = Column(String(128))
@@ -27,24 +31,17 @@ class GuildMember(Base):
     def __init__(
         self,
         *,
-        member: Union[Member, User],
+        discord_member: Member,
         activision_id: str,
-        twitter_name: Optional[str],
-        passkey: Optional[int],
+        passkey: int,
+        twitter_name: Optional[str]
     ):
-        self.id = member.id
+        self.id = discord_member.id
+        self.guild_id = discord_member.guild.id
         self.activision_id = activision_id
-        if len(str(passkey)) != 4:
-            passkey = 0000
-
         self.passkey_hash = sha256(str(passkey).encode('utf-8')).hexdigest()
-        self.joined_on = datetime.utcnow()
-
         self.twitter_name = twitter_name
-
-    def check_passkey(self, passkey: int):
-        hashed_passkey = sha256(str(passkey).encode('utf-8')).hexdigest()
-        return self.passkey_hash == hashed_passkey 
+        self.joined_on = datetime.utcnow()
 
 
 
@@ -52,59 +49,38 @@ class Report(Base):
     """ The id and primary key for this table should be a big integer [id of the message that made the report]"""
     __tablename__ = "report"
     id = Column(BigInteger, primary_key=True, autoincrement=False)
+    suspect_activision = Column(String(32), index=True)
+    platform = Column(String(32), index=True, default="Unknown")
     timestamp = Column(DateTime, index=True)
-    tzone = Column(String, index=True, default="CST")
 
-    location = Column(String(32), index=True, default="Public Matchmaking")
-    reporter_message = Column(String(256), nullable=True)
+    message = Column(String(144), default="")
+    admin_notes = Column(String(256), default="")
 
-    suspect_activision_id = Column(String(32), index=True)
-    suspect_gamebattles = Column(String(32), index=True)
-    suspect_cmg = Column(String(32), index=True)
-    suspect_platform = Column(String(32), index=True, default="Battle.net")
-
-    proof_link_1 = Column(String(128))
-    proof_link_2 = Column(String(128))
-    proof_link_3 = Column(String(128))
-    authorized = Column(Boolean, default=False)
-
-    member_id = Column(ForeignKey("member.id"))
-    member = relationship("Member", back_populates="reports")
-
-    case_id = Column(ForeignKey("case.id"))
-    case = relationship("Case", back_populates="reports")
-
+    proof_link = Column(String(128))
+    guild_id = Column(BigInteger, index=True)
+    
+    bot_user_id = Column(ForeignKey("bot_user.id"))
+    bot_user = relationship("BotUser", back_populates="reports")
+    
     def __init__(
         self,
-        passke: int,
         *,
-        discord_message: Message,
-        reporting_member: GuildMember,
-        tzone: Literal["PST", "CST", "MST", "EST", "Other"],
-        location: Literal["Public Matchmaking", "CMGs", "GBs", "Customs", "CDL Moshpit", "Ranked Mode"],
-        suspect_activision_id: str,
-        platform: Literal["Playstation", "Xbox", "Battle.net", "Unknown"],
-        reporter_message: Optional[str],
-        proof_link_1: Optional[str],
-        **aliases
+        context_message: Message,
+        bot_user: BotUser,
+        suspect_activision: str,
+        platform: Optional[Literal["Playstation", "Xbox", "Battle.net", "Unknown"]],
+        message: Optional[str],
+        proof_link: Optional[str]
     ):
-        self.id = int(discord_message.id)
-        self.member = reporting_member
-        self.timestamp = datetime.utcnow()
-        self.tzone = tzone
-
-        self.location = location
-        self.reporter_message = reporter_message
-
-        self.suspect_activision_id = suspect_activision_id
-        for alias_key in aliases:
-            setattr(self, alias_key, aliases[alias_key])
+        self.id = context_message.id
+        self.guild_id = bot_user.guild_id
+        self.bot_user = bot_user
+        self.suspect_activision = suspect_activision
         self.platform = platform
-        self.proof_link_1 = proof_link_1
-        if self.member.check_passkey(passkey):
-            self.authorized = True
+        self.message = message
+        self.proof_link = proof_link
 
-
+o    
 
 engine = create_async_engine("sqlite+aiosqlite:///data.db")
 AioSession = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
